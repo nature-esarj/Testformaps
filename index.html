@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Exported Map Preview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://unpkg.com/maplibre-gl@5.18.0/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; }
+    body.is-mobile-runtime { background: #000; }
+    body.is-mobile-runtime #map { width: 100%; height: 100vh; height: 100dvh; border: 1px solid #cddfe0; box-sizing: border-box; border-radius: 0; margin: 0; }
+    #rulerMeasurementDisplay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 3;
+      display: none;
+      padding: 6px 10px;
+      border: none;
+      background: rgba(0, 0, 0, 0.5);
+      color: #fff;
+      font: 12px sans-serif;
+      pointer-events: none;
+    }
+    #exportLayerControl {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #e6eef0;
+      padding: 8px;
+      width: 260px;
+      box-sizing: border-box;
+      max-height: 50vh;
+      overflow-y: auto;
+      font: 12px sans-serif;
+      display: none;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); /* --ui-shadow fallback */
+    }
+    #exportLayerControl.maplibregl-ctrl {
+      display: block;
+      margin: 10px;
+    }
+    #exportLayerControl h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    #exportLayerList {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .export-layer-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .export-layer-item span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .export-layer-title-item {
+      margin: 0;
+      padding: 0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    #exportMapLegendPanel {
+      position: absolute;
+      right: 10px;
+      bottom: 44px;
+      z-index: 3;
+      display: none;
+      width: min(320px, calc(100% - 20px));
+      max-height: 45vh;
+      overflow-y: auto;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid #e6eef0;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+      padding: 12px;
+      font: 13px sans-serif;
+      color: #0f1720;
+      pointer-events: auto;
+    }
+    #exportMapScaleBarPanel {
+      position: absolute;
+      left: 50%;
+      bottom: 10px;
+      transform: translateX(-50%);
+      z-index: 3;
+      display: none;
+      pointer-events: none;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.5);
+      border: 0px solid #e6eef0;
+      border-radius: 0;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+      padding: 0;
+      text-align: center;
+    }
+    #exportMapScaleBarPanel .maplibregl-ctrl-scale {
+      margin: 0;
+      border-left: 1px solid #000;
+      border-right: 1px solid #000;
+      border-bottom: 1px solid #000;
+      border-top: none;
+      background: transparent;
+      font: 11px sans-serif;
+      color: #0f1720;
+    }
+    #exportMobileControls {
+      display: none;
+    }
+    body.is-mobile-runtime #exportMobileControls {
+      position: absolute;
+      right: 16px;
+      bottom: 84px;
+      transform: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 6;
+      pointer-events: auto;
+    }
+    body.is-mobile-runtime #exportMobileFab {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #0f62fe;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 26px rgba(2, 6, 23, 0.24);
+      cursor: pointer;
+      border: none;
+      font-size: 20px;
+    }
+    body.is-mobile-runtime #exportMobileFabPanel {
+      position: absolute;
+      right: 0;
+      bottom: 58px;
+      transform: none;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 14px;
+      padding: 10px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+      border: 1px solid #e6eef0;
+      min-width: 156px;
+      backdrop-filter: blur(3px);
+    }
+    body.is-mobile-runtime #exportMobileFab[aria-expanded="true"] + #exportMobileFabPanel {
+      display: flex;
+    }
+    body.is-mobile-runtime #exportMobileFabPanel button {
+      appearance: none;
+      border: 1px solid #e6eef0;
+      background: linear-gradient(180deg, #ffffff 0%, #f7faf9 100%);
+      color: #0f1720;
+      border-radius: 10px;
+      min-height: 36px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    body.is-mobile-runtime #exportMobileFabPanel button:hover {
+      background: rgba(15, 98, 254, 0.06);
+      border-color: #b7cdf8;
+    }
+    body.is-mobile-runtime #exportLayerControl,
+    body.is-mobile-runtime #exportMapLegendPanel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      max-height: 72%;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      margin: 0;
+      border-radius: 16px 16px 0 0;
+      border-left: 0;
+      border-right: 0;
+      border-bottom: 0;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 -8px 28px rgba(2, 6, 23, 0.22);
+      transform: translateY(100%);
+      transition: transform 180ms ease;
+      pointer-events: auto;
+    }
+    body.is-mobile-runtime #exportLayerControl.maplibregl-ctrl {
+      margin: 0;
+    }
+    body.is-mobile-runtime #exportLayerControl::before,
+    body.is-mobile-runtime #exportMapLegendPanel::before {
+      content: '';
+      display: block;
+      width: 44px;
+      height: 4px;
+      margin: 2px auto 10px;
+      border-radius: 999px;
+      background: #cddfe0;
+      pointer-events: none;
+    }
+    body.is-mobile-runtime #exportLayerControl.is-open,
+    body.is-mobile-runtime #exportMapLegendPanel.is-open {
+      transform: translateY(0);
+    }
+    body.is-mobile-runtime #exportMapScaleBarPanel {
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      padding: 6px 0px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); /* --ui-shadow fallback */
+      font-size: 11px;
+      pointer-events: auto;
+      z-index: 6;
+      border: 1px solid #e6eef0; /* --ui-border fallback */
+    }
+    body.is-mobile-runtime #exportMapScaleBarPanel .maplibregl-ctrl-scale {
+      margin: 0;
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+      color: #1f2937;
+      font-size: 11px;
+      line-height: 1;
+      padding: 3px 6px;
+      min-width: 46px;
+      min-height: 14px;
+    }
+    body.is-mobile-runtime .maplibregl-ctrl-geolocate {
+      display: none !important;
+    }
+    .map-legend-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .map-legend-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .map-legend-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 2px 8px;
+    }
+    .map-legend-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .map-legend-symbol {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #374151;
+      border-radius: 2px;
+      box-sizing: border-box;
+      background: transparent;
+      flex: 0 0 auto;
+    }
+    .map-legend-symbol.point {
+      border-radius: 999px;
+    }
+    .map-legend-symbol.line {
+      width: 14px;
+      height: 0;
+      border: none;
+      border-top: 2.4px solid #374151;
+      border-radius: 0;
+    }
+    .map-legend-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .map-legend-style {
+      color: #6b7280;
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .map-legend-categories {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .map-legend-category {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 5px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .map-legend-category-name {
+      color: #6b7280;
+      font-size: 12px;
+      white-space: normal;
+      word-break: break-word;
+      min-width: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="rulerMeasurementDisplay" aria-live="polite">Measured distance: 0 m</div>
+  <div id="exportMapLegendPanel" aria-live="polite"></div>
+  <div id="exportMapScaleBarPanel" aria-hidden="true"></div>
+  <div id="exportLayerControl">
+    <h3 id="exportLayerControlTitle"></h3>
+    <div id="exportLayerList"></div>
+  </div>
+  <div id="exportMobileControls" aria-label="Mobile map controls">
+    <button id="exportMobileFab" type="button" aria-expanded="false" aria-label="Open map controls">☰</button>
+    <div id="exportMobileFabPanel" role="menu">
+      <button id="exportToggleLayers" type="button">Layers</button>
+      <button id="exportToggleLegend" type="button">Legend</button>
+      <button id="exportToggleScale" type="button">Scale</button>
+    </div>
+  </div>
+  <script src="https://unpkg.com/maplibre-gl@5.18.0/dist/maplibre-gl.js"></script>
+  <script>
+    const exportedLayers = [{"id":"1772564363083-dssdvy","name":"hannover.geojson","layerLabel":"hannover.geojson","data":{"type":"FeatureCollection","name":"hannover","crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:OGC:1.3:CRS84"}},"features":[{"type":"Feature","properties":{"name":"hannover","Area":100,"__mapFeatureId":"1772564363083-0-bejmnw"},"geometry":{"type":"Polygon","coordinates":[[[9.767653598186692,52.342709367259786],[9.706171513103017,52.39824516434689],[9.704487072415795,52.451144824887],[9.856928954609556,52.47372339079734],[9.87040448010735,52.42341893832133],[9.829135683270364,52.360200390032084],[9.767653598186692,52.342709367259786]]]}},{"type":"Feature","properties":{"name":"celle","Area":10,"__mapFeatureId":"1772564363083-1-xvzql6"},"geometry":{"type":"Polygon","coordinates":[[[9.61016383746134,52.643229647909855],[9.66420315642149,52.77832794531023],[9.707116733242783,52.6893220081994],[9.683275857230953,52.65276599831459],[9.61016383746134,52.643229647909855]]]}},{"type":"Feature","properties":{"name":"neustadt","Area":150,"__mapFeatureId":"1772564363083-2-1poa1h"},"geometry":{"type":"Polygon","coordinates":[[[10.204596346022978,52.48905864970002],[10.096517708102681,52.678196266060546],[10.004332987523602,52.538329793457805],[10.04247838914253,52.493826824902385],[10.204596346022978,52.48905864970002]]]}},{"type":"Feature","properties":{"name":"hannover","Area":20,"__mapFeatureId":"1772564363083-3-330mb0"},"geometry":{"type":"Polygon","coordinates":[[[9.881177878392425,52.59668910297432],[9.828203838359267,52.67415651635614],[9.90453202507371,52.69466259636898],[9.881177878392425,52.59668910297432]]]}}]},"style":{"fillColor":"#0080ff","borderColor":"#000000","categoryField":"name","categoryColors":{"celle":"#3b82f6","hannover":"#ef4444","neustadt":"#f59e0b"},"categoryBorderColors":{"celle":"#2756a2","hannover":"#9e2d2d","neustadt":"#a26807"}},"popupConfig":{"fields":["name"],"template":"Info\nName: {{name}}"},"visible":true},{"id":"1772564368976-u07ge1","name":"autobahn_lines.geojson","layerLabel":"autobahn_lines.geojson","data":{"type":"FeatureCollection","name":"autobahn_lines","crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:OGC:1.3:CRS84"}},"features":[{"type":"Feature","properties":{"fid":1,"__mapFeatureId":"1772564368976-0-7m93h9"},"geometry":{"type":"MultiLineString","coordinates":[[[9.502085199541042,52.641640256175734],[9.576786611044778,52.641640256175734],[9.670560723357976,52.411178454728045]]]}},{"type":"Feature","properties":{"fid":2,"__mapFeatureId":"1772564368976-1-ylz5fu"},"geometry":{"type":"MultiLineString","coordinates":[[[9.603806270524851,52.18071665328035],[9.417847437632574,52.334887651490185]]]}}]},"style":{"fillColor":"#0080ff","borderColor":"#000000","categoryField":"","categoryColors":{},"categoryBorderColors":{}},"popupConfig":{"fields":[],"template":""},"visible":true},{"id":"1772564375417-zghfu0","name":"Neustadt_points.geojson","layerLabel":"Neustadt_points.geojson","data":{"type":"FeatureCollection","name":"Neustadt_points","crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:OGC:1.3:CRS84"}},"features":[{"type":"Feature","properties":{"fid":1,"__mapFeatureId":"1772564375416-0-emkhgv"},"geometry":{"type":"Point","coordinates":[9.181589397480352,52.58439438477782]}},{"type":"Feature","properties":{"fid":2,"__mapFeatureId":"1772564375417-1-4y8jko"},"geometry":{"type":"Point","coordinates":[9.713196181151567,52.64756946577679]}},{"type":"Feature","properties":{"fid":3,"__mapFeatureId":"1772564375417-2-hfow2c"},"geometry":{"type":"Point","coordinates":[9.334828363591983,52.262518753757824]}},{"type":"Feature","properties":{"fid":4,"__mapFeatureId":"1772564375417-3-o3ldbc"},"geometry":{"type":"Point","coordinates":[9.334828363591983,52.473906629508505]}}]},"style":{"fillColor":"#0080ff","borderColor":"#000000","categoryField":"","categoryColors":{},"categoryBorderColors":{}},"popupConfig":{"fields":[],"template":""},"visible":false}];
+    const exportedTitles = [{"id":"1772564388524-rb5lyt","label":"New Title","exclusive":true}];
+    const exportedOrderKeys = ["layer:1772564363083-dssdvy","title:1772564388524-rb5lyt","layer:1772564368976-u07ge1","layer:1772564375417-zghfu0"];
+    const exportMainTitle = "Saved Layers";
+    const exportMainTitleExclusive = false;
+    const exportShowLegend = true;
+    const exportShowScale = true;
+    const exportControlPositions = {"layerControl":{"mode":"visual-panel","left":"10px","top":"810px","right":"auto","bottom":"auto","transform":"none"},"legend":{"left":"7px","top":"11px","right":"auto","bottom":"auto","transform":""},"scale":{"left":"","top":"","right":"","bottom":"","transform":""}};
+    const rulerMeasurementDisplay = document.getElementById('rulerMeasurementDisplay');
+    const exportMapLegendPanel = document.getElementById('exportMapLegendPanel');
+    const exportMapScaleBarPanel = document.getElementById('exportMapScaleBarPanel');
+    const exportLayerControlElement = document.getElementById('exportLayerControl');
+    const exportLayerControlTitle = document.getElementById('exportLayerControlTitle');
+    const exportLayerList = document.getElementById('exportLayerList');
+    const exportMobileControls = document.getElementById('exportMobileControls');
+    const exportMobileFab = document.getElementById('exportMobileFab');
+    const exportMobileFabPanel = document.getElementById('exportMobileFabPanel');
+    const exportToggleLayersBtn = document.getElementById('exportToggleLayers');
+    const exportToggleLegendBtn = document.getElementById('exportToggleLegend');
+    const exportToggleScaleBtn = document.getElementById('exportToggleScale');
+    const exportedLayersById = new Map(exportedLayers.map((item) => [item.id, item]));
+    const MAIN_TITLE_GROUP_ID = '__main__';
+    const RULER_SOURCE_ID = 'ruler-source';
+    const RULER_LINE_LAYER_ID = 'ruler-line';
+    const RULER_POINT_LAYER_ID = 'ruler-points';
+    const rulerPoints = [];
+    const exportMovedElements = [];
+    const exportScaleBarControl = new maplibregl.ScaleControl({
+      maxWidth: 160,
+      unit: 'metric'
+    });
+    const exportPrimaryStyle = "https://tiles.openfreemap.org/styles/bright";
+    let isExportMobileLayoutActive = false;
+    let isExportScaleBarControlAttached = false;
+    let isExportScaleTemporarilyHidden = true;
+    let hasExportStyleLoaded = false;
+    let exportMapClickHandlerBound = false;
+    let isRulerActive = false;
+    let rulerButton = null;
+
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: exportPrimaryStyle,
+      center: [9.78579103860966,52.49204821081122],
+      zoom: 8.9834,
+      bearing: 0,
+      pitch: 0,
+      attributionControl: true
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.addControl(new maplibregl.GeolocateControl({
+      positionOptions: {
+        enableHighAccuracy: true
+      },
+      trackUserLocation: false,
+      showUserHeading: true
+    }), 'top-right');
+
+    const exportLayerControlPlugin = {
+      onAdd() {
+        exportLayerControlElement.classList.add('maplibregl-ctrl');
+        exportLayerControlElement.addEventListener('mousedown', (event) => event.stopPropagation());
+        exportLayerControlElement.addEventListener('pointerdown', (event) => event.stopPropagation());
+        exportLayerControlElement.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
+        exportLayerControlElement.addEventListener('dblclick', (event) => event.stopPropagation());
+        return exportLayerControlElement;
+      },
+      onRemove() {
+        exportLayerControlElement.classList.remove('maplibregl-ctrl');
+        if (exportLayerControlElement.parentNode) {
+          exportLayerControlElement.parentNode.removeChild(exportLayerControlElement);
+        }
+      }
+    };
+
+    map.addControl(exportLayerControlPlugin, 'bottom-left');
+
+    function moveElementIntoExportMap(el) {
+      if (!el) {
+        return;
+      }
+
+      const mapEl = document.getElementById('map');
+      if (!mapEl) {
+        return;
+      }
+
+      if (el.parentNode === mapEl) {
+        return;
+      }
+
+      exportMovedElements.push({ el, parent: el.parentNode, nextSibling: el.nextSibling });
+      mapEl.appendChild(el);
+    }
+
+    function restoreMovedExportElements() {
+      for (let index = exportMovedElements.length - 1; index >= 0; index -= 1) {
+        const entry = exportMovedElements[index];
+        try {
+          if (!entry.parent) {
+            continue;
+          }
+
+          if (entry.nextSibling && entry.nextSibling.parentNode === entry.parent) {
+            entry.parent.insertBefore(entry.el, entry.nextSibling);
+          } else {
+            entry.parent.appendChild(entry.el);
+          }
+        } catch (error) {
+        }
+      }
+
+      exportMovedElements.length = 0;
+    }
+
+    function setExportFabExpanded(nextExpanded) {
+      if (!exportMobileFab) {
+        return;
+      }
+
+      exportMobileFab.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+    }
+
+    function setExportLayerSheetOpen(nextOpen) {
+      if (!exportLayerControlElement) {
+        return;
+      }
+
+      exportLayerControlElement.classList.toggle('is-open', Boolean(nextOpen));
+    }
+
+    function setExportLegendSheetOpen(nextOpen) {
+      if (!exportMapLegendPanel || !exportShowLegend) {
+        return;
+      }
+
+      exportMapLegendPanel.classList.toggle('is-open', Boolean(nextOpen));
+    }
+
+    function closeExportBottomSheets() {
+      setExportLayerSheetOpen(false);
+      setExportLegendSheetOpen(false);
+    }
+
+    function syncExportMobileActionButtons() {
+      if (exportToggleLegendBtn) {
+        exportToggleLegendBtn.style.display = exportShowLegend ? '' : 'none';
+      }
+
+      if (exportToggleScaleBtn) {
+        exportToggleScaleBtn.style.display = exportShowScale ? '' : 'none';
+      }
+    }
+
+    function renderExportScalePanel() {
+      if (!exportMapScaleBarPanel || !exportShowScale) {
+        if (exportMapScaleBarPanel) {
+          exportMapScaleBarPanel.style.display = 'none';
+        }
+        return;
+      }
+
+      if (!isExportScaleBarControlAttached) {
+        const scaleElement = exportScaleBarControl.onAdd(map);
+        exportMapScaleBarPanel.innerHTML = '';
+        exportMapScaleBarPanel.appendChild(scaleElement);
+        isExportScaleBarControlAttached = true;
+      }
+
+      const shouldHideScale = isExportMobileLayoutActive && isExportScaleTemporarilyHidden;
+      exportMapScaleBarPanel.style.display = shouldHideScale ? 'none' : 'block';
+    }
+
+    function applyExportControlPosition(element, position) {
+      if (!element || !position || typeof position !== 'object') {
+        return;
+      }
+
+      element.style.left = typeof position.left === 'string' ? position.left : '';
+      element.style.top = typeof position.top === 'string' ? position.top : '';
+      element.style.right = typeof position.right === 'string' ? position.right : '';
+      element.style.bottom = typeof position.bottom === 'string' ? position.bottom : '';
+      element.style.transform = typeof position.transform === 'string' ? position.transform : '';
+    }
+
+    function applyExportControlVisualPosition(containerElement, anchorElement, position) {
+      if (!containerElement || !anchorElement || !position || typeof position !== 'object') {
+        return;
+      }
+
+      const targetLeft = Number.parseFloat(position.left);
+      const targetTop = Number.parseFloat(position.top);
+      if (!Number.isFinite(targetLeft) || !Number.isFinite(targetTop)) {
+        applyExportControlPosition(containerElement, position);
+        return;
+      }
+
+      const mapElement = document.getElementById('map');
+      if (!mapElement) {
+        applyExportControlPosition(containerElement, position);
+        return;
+      }
+
+      const containerRect = containerElement.getBoundingClientRect();
+      const anchorRect = anchorElement.getBoundingClientRect();
+      const anchorOffsetLeft = anchorRect.left - containerRect.left;
+      const anchorOffsetTop = anchorRect.top - containerRect.top;
+      const maxLeft = Math.max(0, mapElement.clientWidth - containerRect.width);
+      const maxTop = Math.max(0, mapElement.clientHeight - containerRect.height);
+      const desiredLeft = Math.min(Math.max(targetLeft - anchorOffsetLeft, 0), maxLeft);
+      const desiredTop = Math.min(Math.max(targetTop - anchorOffsetTop, 0), maxTop);
+
+      containerElement.style.left = desiredLeft + 'px';
+      containerElement.style.top = desiredTop + 'px';
+      containerElement.style.right = 'auto';
+      containerElement.style.bottom = 'auto';
+      containerElement.style.transform = 'none';
+    }
+
+    function clearExportControlPosition(element) {
+      if (!element) {
+        return;
+      }
+
+      element.style.left = '';
+      element.style.top = '';
+      element.style.right = '';
+      element.style.bottom = '';
+      element.style.transform = '';
+    }
+
+    function applyDesktopExportControlPositions() {
+      const exportBottomLeftControlGroup = map && typeof map.getContainer === 'function'
+        ? map.getContainer().querySelector('.maplibregl-ctrl-bottom-left')
+        : null;
+
+      if (exportBottomLeftControlGroup) {
+        if (exportControlPositions.layerControl && exportControlPositions.layerControl.mode === 'visual-panel') {
+          applyExportControlVisualPosition(exportBottomLeftControlGroup, exportLayerControlElement, exportControlPositions.layerControl);
+        } else {
+          applyExportControlPosition(exportBottomLeftControlGroup, exportControlPositions.layerControl);
+        }
+      }
+
+      if (exportMapLegendPanel) {
+        applyExportControlPosition(exportMapLegendPanel, exportControlPositions.legend);
+      }
+
+      if (exportMapScaleBarPanel) {
+        applyExportControlPosition(exportMapScaleBarPanel, exportControlPositions.scale);
+      }
+    }
+
+    function clearDesktopExportControlPositions() {
+      const exportBottomLeftControlGroup = map && typeof map.getContainer === 'function'
+        ? map.getContainer().querySelector('.maplibregl-ctrl-bottom-left')
+        : null;
+
+      clearExportControlPosition(exportBottomLeftControlGroup);
+      clearExportControlPosition(exportMapLegendPanel);
+      clearExportControlPosition(exportMapScaleBarPanel);
+    }
+
+    function shouldUseMobileRuntimeLayout() {
+      const uaDataMobile = Boolean(navigator.userAgentData && navigator.userAgentData.mobile === true);
+      const userAgent = navigator.userAgent || '';
+      const mobileUa = /Android|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini/i.test(userAgent);
+      const iPadDesktopUa = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+      const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      const compactViewport = window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+      return uaDataMobile || mobileUa || iPadDesktopUa || (hasTouch && compactViewport);
+    }
+
+    function enterExportMobileRuntimeLayout() {
+      isExportMobileLayoutActive = true;
+      isExportScaleTemporarilyHidden = true;
+      moveElementIntoExportMap(exportLayerControlElement);
+      moveElementIntoExportMap(exportMapLegendPanel);
+      moveElementIntoExportMap(exportMapScaleBarPanel);
+      moveElementIntoExportMap(exportMobileControls);
+      setExportFabExpanded(false);
+      closeExportBottomSheets();
+      syncExportMobileActionButtons();
+      renderExportScalePanel();
+    }
+
+    function exitExportMobileRuntimeLayout() {
+      isExportMobileLayoutActive = false;
+      isExportScaleTemporarilyHidden = false;
+      setExportFabExpanded(false);
+      closeExportBottomSheets();
+      restoreMovedExportElements();
+      renderExportScalePanel();
+    }
+
+    function applyRuntimeExportLayout() {
+      const useMobileLayout = shouldUseMobileRuntimeLayout();
+      document.body.classList.toggle('is-mobile-runtime', useMobileLayout);
+
+      if (useMobileLayout && !isExportMobileLayoutActive) {
+        enterExportMobileRuntimeLayout();
+      } else if (!useMobileLayout && isExportMobileLayoutActive) {
+        exitExportMobileRuntimeLayout();
+      } else {
+        syncExportMobileActionButtons();
+        renderExportScalePanel();
+      }
+
+      if (useMobileLayout) {
+        clearDesktopExportControlPositions();
+      } else {
+        applyDesktopExportControlPositions();
+      }
+
+      if (map && typeof map.resize === 'function') {
+        map.resize();
+      }
+    }
+
+    window.addEventListener('resize', applyRuntimeExportLayout);
+
+    if (exportMobileFab) {
+      exportMobileFab.addEventListener('click', () => {
+        const expanded = exportMobileFab.getAttribute('aria-expanded') === 'true';
+        setExportFabExpanded(!expanded);
+        if (expanded) {
+          closeExportBottomSheets();
+        }
+      });
+    }
+
+    if (exportToggleLayersBtn) {
+      exportToggleLayersBtn.addEventListener('click', () => {
+        const isOpen = exportLayerControlElement.classList.contains('is-open');
+        if (!isOpen) {
+          setExportLegendSheetOpen(false);
+        }
+        setExportLayerSheetOpen(!isOpen);
+      });
+    }
+
+    if (exportToggleLegendBtn) {
+      exportToggleLegendBtn.addEventListener('click', () => {
+        if (!exportShowLegend) {
+          return;
+        }
+
+        const isOpen = exportMapLegendPanel.classList.contains('is-open');
+        if (!isOpen) {
+          setExportLayerSheetOpen(false);
+        }
+        setExportLegendSheetOpen(!isOpen);
+      });
+    }
+
+    if (exportToggleScaleBtn) {
+      exportToggleScaleBtn.addEventListener('click', () => {
+        if (!exportShowScale) {
+          return;
+        }
+
+        isExportScaleTemporarilyHidden = !isExportScaleTemporarilyHidden;
+        renderExportScalePanel();
+      });
+    }
+
+    document.addEventListener('click', (event) => {
+      if (!isExportMobileLayoutActive) {
+        return;
+      }
+
+      const eventTarget = event.target;
+      if (!(eventTarget instanceof Node)) {
+        return;
+      }
+
+      const clickInsideControls = exportMobileControls && exportMobileControls.contains(eventTarget);
+      if (clickInsideControls) {
+        return;
+      }
+
+      setExportFabExpanded(false);
+
+      const clickInsideLayerSheet = exportLayerControlElement && exportLayerControlElement.contains(eventTarget);
+      const clickInsideLegendSheet = exportMapLegendPanel && exportMapLegendPanel.contains(eventTarget);
+      if (clickInsideLayerSheet || clickInsideLegendSheet) {
+        return;
+      }
+
+      closeExportBottomSheets();
+    });
+
+    applyRuntimeExportLayout();
+
+    let exportFeaturePopup = null;
+    const interactiveLayerIds = [];
+    const layerEntryByLayerId = new Map();
+
+    function haversineDistanceKm(start, end) {
+      const toRadians = (value) => value * (Math.PI / 180);
+      const earthRadiusKm = 6371;
+      const dLat = toRadians(end[1] - start[1]);
+      const dLon = toRadians(end[0] - start[0]);
+      const lat1 = toRadians(start[1]);
+      const lat2 = toRadians(end[1]);
+
+      const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+      return 2 * earthRadiusKm * Math.asin(Math.sqrt(a));
+    }
+
+    function getRulerDistanceKm() {
+      if (rulerPoints.length < 2) {
+        return 0;
+      }
+
+      let total = 0;
+      for (let index = 1; index < rulerPoints.length; index += 1) {
+        total += haversineDistanceKm(rulerPoints[index - 1], rulerPoints[index]);
+      }
+      return total;
+    }
+
+    function formatDistanceLabel(distanceKm) {
+      if (distanceKm < 1) {
+        return Math.round(distanceKm * 1000) + ' m';
+      }
+      return distanceKm.toFixed(2) + ' km';
+    }
+
+    function getRulerFeatureCollection() {
+      const pointFeatures = rulerPoints.map((coordinates) => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates
+        },
+        properties: {}
+      }));
+
+      const features = [...pointFeatures];
+
+      if (rulerPoints.length >= 2) {
+        features.unshift({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [...rulerPoints]
+          },
+          properties: {}
+        });
+      }
+
+      return {
+        type: 'FeatureCollection',
+        features
+      };
+    }
+
+    function ensureRulerLayers() {
+      if (!map.getSource(RULER_SOURCE_ID)) {
+        map.addSource(RULER_SOURCE_ID, {
+          type: 'geojson',
+          data: getRulerFeatureCollection()
+        });
+      }
+
+      if (!map.getLayer(RULER_LINE_LAYER_ID)) {
+        map.addLayer({
+          id: RULER_LINE_LAYER_ID,
+          type: 'line',
+          source: RULER_SOURCE_ID,
+          filter: ['==', ['geometry-type'], 'LineString'],
+          paint: {
+            'line-color': '#000000',
+            'line-width': 2,
+            'line-dasharray': [2, 2]
+          }
+        });
+      }
+
+      if (!map.getLayer(RULER_POINT_LAYER_ID)) {
+        map.addLayer({
+          id: RULER_POINT_LAYER_ID,
+          type: 'circle',
+          source: RULER_SOURCE_ID,
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: {
+            'circle-radius': 4,
+            'circle-color': '#0080ff',
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#000000'
+          }
+        });
+      }
+    }
+
+    function refreshRulerData() {
+      ensureRulerLayers();
+      const rulerSource = map.getSource(RULER_SOURCE_ID);
+      if (rulerSource) {
+        rulerSource.setData(getRulerFeatureCollection());
+      }
+    }
+
+    function updateRulerMeasurementDisplay() {
+      if (!isRulerActive) {
+        rulerMeasurementDisplay.style.display = 'none';
+        return;
+      }
+
+      const totalDistance = getRulerDistanceKm();
+      rulerMeasurementDisplay.textContent = 'Measured distance: ' + formatDistanceLabel(totalDistance);
+      rulerMeasurementDisplay.style.display = 'block';
+    }
+
+    function updateRulerButtonLabel() {
+      if (!rulerButton) {
+        return;
+      }
+
+      rulerButton.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect x="1.32" y="8.44" width="21.36" height="9.54" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linejoin="round"/><path d="M18.55 8.75V11.47M14.46 8.79V11.52M9.98 8.84V11.56M5.49 8.84V11.56" fill="none" stroke="currentColor" stroke-width="2.0" stroke-linecap="round"/></svg>';
+      rulerButton.title = isRulerActive
+        ? 'Ruler active (click map to add points, click again to clear)'
+        : 'Ruler';
+    }
+
+    function onRulerMapClick(event) {
+      rulerPoints.push([event.lngLat.lng, event.lngLat.lat]);
+      refreshRulerData();
+      updateRulerMeasurementDisplay();
+      updateRulerButtonLabel();
+    }
+
+    function clearRulerMeasurement() {
+      rulerPoints.length = 0;
+      refreshRulerData();
+    }
+
+    function deactivateRuler() {
+      isRulerActive = false;
+      map.off('click', onRulerMapClick);
+      map.getCanvas().style.cursor = '';
+      clearRulerMeasurement();
+      updateRulerMeasurementDisplay();
+      updateRulerButtonLabel();
+    }
+
+    function activateRuler() {
+      isRulerActive = true;
+      clearRulerMeasurement();
+      map.on('click', onRulerMapClick);
+      map.getCanvas().style.cursor = 'crosshair';
+      updateRulerMeasurementDisplay();
+      updateRulerButtonLabel();
+    }
+
+    function toggleRuler() {
+      if (isRulerActive) {
+        deactivateRuler();
+        return;
+      }
+
+      activateRuler();
+    }
+
+    const rulerControlPlugin = {
+      onAdd() {
+        const container = document.createElement('div');
+        container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('aria-label', 'Toggle ruler control');
+        button.addEventListener('click', toggleRuler);
+
+        container.appendChild(button);
+        rulerButton = button;
+        updateRulerButtonLabel();
+
+        this.container = container;
+        this.button = button;
+
+        return container;
+      },
+      onRemove() {
+        if (isRulerActive) {
+          deactivateRuler();
+        }
+
+        if (this.button) {
+          this.button.removeEventListener('click', toggleRuler);
+        }
+
+        if (this.container && this.container.parentNode) {
+          this.container.parentNode.removeChild(this.container);
+        }
+
+        rulerButton = null;
+      }
+    };
+
+    map.addControl(rulerControlPlugin, 'top-right');
+
+    function getLayerSourceId(savedId) {
+      return 'saved-source-' + savedId;
+    }
+
+    function getLayerId(savedId, layerType) {
+      return 'saved-' + savedId + '-' + layerType;
+    }
+
+    function buildCategoryColorExpression(style, defaultColor, categoryColorKey = 'categoryColors') {
+      const styleObject = style && typeof style === 'object' ? style : {};
+      const fieldName = typeof styleObject.categoryField === 'string' ? styleObject.categoryField.trim() : '';
+      const categoryColors = styleObject[categoryColorKey] && typeof styleObject[categoryColorKey] === 'object'
+        ? styleObject[categoryColorKey]
+        : null;
+
+      if (!fieldName || !categoryColors) {
+        return defaultColor;
+      }
+
+      const entries = Object.entries(categoryColors).filter(([categoryValue, colorValue]) => {
+        return categoryValue !== ''
+          && typeof colorValue === 'string'
+          && /^#[0-9a-fA-F]{6}$/.test(colorValue);
+      });
+
+      if (!entries.length) {
+        return defaultColor;
+      }
+
+      const expression = ['match', ['to-string', ['coalesce', ['get', fieldName], '']]];
+      entries.forEach(([categoryValue, colorValue]) => {
+        expression.push(categoryValue, colorValue);
+      });
+      expression.push(defaultColor);
+      return expression;
+    }
+
+    function normalizePopupConfig(config) {
+      const fields = Array.isArray(config && config.fields)
+        ? config.fields.filter((fieldName) => typeof fieldName === 'string' && fieldName.trim() !== '')
+        : [];
+      const template = config && typeof config.template === 'string' ? config.template : '';
+
+      return {
+        fields,
+        template
+      };
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function buildPreviewPopupHtml(entry, properties) {
+      const popupConfig = normalizePopupConfig(entry.popupConfig);
+      const safeProperties = properties && typeof properties === 'object' ? properties : {};
+      const templateText = popupConfig.template.trim();
+
+      if (templateText) {
+        const resolved = templateText.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (match, fieldName) => {
+          const value = safeProperties[fieldName];
+          if (value === undefined || value === null || value === '') {
+            return '';
+          }
+          return String(value);
+        });
+
+        const lines = resolved
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .map((line) => '<div>' + escapeHtml(line) + '</div>');
+
+        if (lines.length) {
+          return lines.join('');
+        }
+      }
+
+      const rows = popupConfig.fields
+        .map((fieldName) => {
+          const value = safeProperties[fieldName];
+          if (value === undefined || value === null || value === '') {
+            return '';
+          }
+          return '<div><strong>' + escapeHtml(fieldName) + ':</strong> ' + escapeHtml(value) + '</div>';
+        })
+        .filter((rowHtml) => rowHtml);
+
+      if (!rows.length) {
+        return '';
+      }
+
+      return rows.join('');
+    }
+
+    function parseOrderKey(orderKey) {
+      const separatorIndex = orderKey.indexOf(':');
+      if (separatorIndex < 0) {
+        return { type: '', id: '' };
+      }
+
+      return {
+        type: orderKey.slice(0, separatorIndex),
+        id: orderKey.slice(separatorIndex + 1)
+      };
+    }
+
+    function getGeojsonFeatures(data) {
+      if (!data || !Array.isArray(data.features)) {
+        return [];
+      }
+      return data.features.filter((feature) => feature && feature.geometry && typeof feature.geometry.type === 'string');
+    }
+
+    function getGeojsonCategoryValues(data, fieldName) {
+      const normalizedField = typeof fieldName === 'string' ? fieldName.trim() : '';
+      if (!normalizedField) {
+        return [];
+      }
+
+      const values = new Set();
+      getGeojsonFeatures(data).forEach((feature) => {
+        const properties = feature.properties && typeof feature.properties === 'object' ? feature.properties : null;
+        if (!properties) {
+          return;
+        }
+
+        const value = properties[normalizedField];
+        if (value === undefined || value === null) {
+          return;
+        }
+
+        const stringValue = String(value).trim();
+        if (stringValue) {
+          values.add(stringValue);
+        }
+      });
+
+      return Array.from(values).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+    }
+
+    function getLayerSymbolType(data) {
+      const geometryTypes = new Set();
+      getGeojsonFeatures(data).forEach((feature) => {
+        geometryTypes.add(feature.geometry.type);
+      });
+
+      if (!geometryTypes.size) {
+        return 'polygon';
+      }
+
+      const lineTypes = new Set(['LineString', 'MultiLineString']);
+      const pointTypes = new Set(['Point', 'MultiPoint']);
+
+      const isLineOnly = Array.from(geometryTypes).every((type) => lineTypes.has(type));
+      if (isLineOnly) {
+        return 'line';
+      }
+
+      const isPointOnly = Array.from(geometryTypes).every((type) => pointTypes.has(type));
+      if (isPointOnly) {
+        return 'point';
+      }
+
+      return 'polygon';
+    }
+
+    function createExportLegendCategoryIcons(entry, symbolType, isLineOnlyLayer) {
+      const style = entry && entry.style && typeof entry.style === 'object' ? entry.style : {};
+      const categoryField = typeof style.categoryField === 'string' ? style.categoryField.trim() : '';
+      if (!categoryField) {
+        return null;
+      }
+
+      const categoryValues = getGeojsonCategoryValues(entry.data, categoryField);
+      if (!categoryValues.length) {
+        return null;
+      }
+
+      const categoryColors = style.categoryColors && typeof style.categoryColors === 'object' ? style.categoryColors : {};
+      const categoryBorderColors = style.categoryBorderColors && typeof style.categoryBorderColors === 'object' ? style.categoryBorderColors : {};
+      const MAX_CATEGORY_ICONS = 8;
+      const categoriesContainer = document.createElement('div');
+      categoriesContainer.className = 'map-legend-categories';
+
+      categoryValues.slice(0, MAX_CATEGORY_ICONS).forEach((categoryValue) => {
+        const categoryItem = document.createElement('span');
+        categoryItem.className = 'map-legend-category';
+
+        const categorySymbol = document.createElement('span');
+        categorySymbol.className = 'map-legend-symbol ' + symbolType;
+        const categoryFillColor = categoryColors[categoryValue] || style.fillColor || '#3b82f6';
+        const categoryStrokeColor = categoryBorderColors[categoryValue] || style.borderColor || '#1f2937';
+
+        if (isLineOnlyLayer) {
+          categorySymbol.style.borderTopColor = categoryStrokeColor;
+        } else {
+          categorySymbol.style.backgroundColor = categoryFillColor;
+          categorySymbol.style.borderColor = categoryStrokeColor;
+        }
+
+        const categoryName = document.createElement('span');
+        categoryName.className = 'map-legend-category-name';
+        categoryName.textContent = categoryValue;
+        categoryName.title = categoryValue;
+
+        categoryItem.appendChild(categorySymbol);
+        categoryItem.appendChild(categoryName);
+        categoriesContainer.appendChild(categoryItem);
+      });
+
+      if (categoryValues.length > MAX_CATEGORY_ICONS) {
+        const moreItem = document.createElement('span');
+        moreItem.className = 'map-legend-style';
+        moreItem.textContent = '+' + (categoryValues.length - MAX_CATEGORY_ICONS) + ' more';
+        categoriesContainer.appendChild(moreItem);
+      }
+
+      return categoriesContainer;
+    }
+
+    function renderExportLegendPanel() {
+      if (!exportMapLegendPanel) {
+        return;
+      }
+
+      if (!exportShowLegend) {
+        exportMapLegendPanel.classList.remove('is-open');
+        exportMapLegendPanel.style.display = 'none';
+        exportMapLegendPanel.innerHTML = '';
+        return;
+      }
+
+      const activeEntries = [];
+      exportedOrderKeys.forEach((orderKey) => {
+        const parsed = parseOrderKey(orderKey);
+        if (parsed.type !== 'layer') {
+          return;
+        }
+
+        const entry = exportedLayersById.get(parsed.id);
+        if (!entry || entry.visible === false) {
+          return;
+        }
+
+        activeEntries.push(entry);
+      });
+
+      const title = document.createElement('div');
+      title.className = 'map-legend-title';
+      title.textContent = 'Legend';
+
+      const list = document.createElement('div');
+      list.className = 'map-legend-list';
+
+      if (!activeEntries.length) {
+        const emptyItem = document.createElement('div');
+        emptyItem.className = 'map-legend-style';
+        emptyItem.textContent = 'No active layers in the layer control.';
+        list.appendChild(emptyItem);
+      } else {
+        activeEntries.forEach((entry) => {
+          const style = entry && entry.style && typeof entry.style === 'object' ? entry.style : {};
+          const categoryField = typeof style.categoryField === 'string' ? style.categoryField.trim() : '';
+          const hasCategoryField = Boolean(categoryField);
+          const symbolType = getLayerSymbolType(entry.data);
+          const isLineOnlyLayer = symbolType === 'line';
+
+          const item = document.createElement('div');
+          item.className = 'map-legend-item';
+
+          const row = document.createElement('div');
+          row.className = 'map-legend-row';
+
+          const symbol = document.createElement('span');
+          symbol.className = 'map-legend-symbol ' + symbolType;
+          const fillColor = style.fillColor || '#3b82f6';
+          const borderColor = style.borderColor || '#1f2937';
+          if (symbolType === 'line') {
+            symbol.style.borderTopColor = borderColor;
+          } else {
+            symbol.style.backgroundColor = fillColor;
+            symbol.style.borderColor = borderColor;
+          }
+
+          const label = document.createElement('span');
+          label.className = 'map-legend-label';
+          label.textContent = entry.layerLabel || entry.name || entry.id;
+          label.title = label.textContent;
+
+          if (!hasCategoryField) {
+            row.appendChild(symbol);
+          }
+          row.appendChild(label);
+
+          item.appendChild(row);
+
+          const categoryIcons = createExportLegendCategoryIcons(entry, symbolType, isLineOnlyLayer);
+          if (categoryIcons) {
+            item.appendChild(categoryIcons);
+          }
+
+          list.appendChild(item);
+        });
+      }
+
+      exportMapLegendPanel.innerHTML = '';
+      exportMapLegendPanel.appendChild(title);
+      exportMapLegendPanel.appendChild(list);
+      exportMapLegendPanel.style.display = 'block';
+    }
+
+    function setSavedLayerVisibility(savedId, isVisible) {
+      const layerIds = [
+        getLayerId(savedId, 'polygon-fill'),
+        getLayerId(savedId, 'line'),
+        getLayerId(savedId, 'polygon-outline'),
+        getLayerId(savedId, 'point')
+      ];
+
+      layerIds.forEach((layerId) => {
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, 'visibility', isVisible ? 'visible' : 'none');
+        }
+      });
+    }
+
+    function getExclusiveGroupLayerIdsByLayerId(layerId) {
+      const titlesById = new Map(exportedTitles.map((item) => [item.id, item]));
+      const layersByGroupId = new Map();
+      let currentGroupId = MAIN_TITLE_GROUP_ID;
+      let targetGroupId = null;
+
+      exportedOrderKeys.forEach((orderKey) => {
+        const parsed = parseOrderKey(orderKey);
+        if (parsed.type === 'title') {
+          currentGroupId = parsed.id;
+          return;
+        }
+
+        if (parsed.type !== 'layer') {
+          return;
+        }
+
+        if (parsed.id === layerId) {
+          targetGroupId = currentGroupId;
+        }
+
+        if (!layersByGroupId.has(currentGroupId)) {
+          layersByGroupId.set(currentGroupId, []);
+        }
+
+        layersByGroupId.get(currentGroupId).push(parsed.id);
+      });
+
+      if (!targetGroupId) {
+        return [];
+      }
+
+      const isExclusiveGroup = targetGroupId === MAIN_TITLE_GROUP_ID
+        ? exportMainTitleExclusive
+        : Boolean(titlesById.get(targetGroupId) && titlesById.get(targetGroupId).exclusive);
+
+      if (!isExclusiveGroup) {
+        return [];
+      }
+
+      return layersByGroupId.get(targetGroupId) || [];
+    }
+
+    function refreshExportLayerControl() {
+      const titlesById = new Map(exportedTitles.map((item) => [item.id, item]));
+      let currentGroupId = MAIN_TITLE_GROUP_ID;
+
+      exportLayerControlTitle.textContent = exportMainTitle;
+      exportLayerList.innerHTML = '';
+
+      if (!exportedLayers.length) {
+        const empty = document.createElement('div');
+        empty.textContent = 'No visible layers exported.';
+        exportLayerList.appendChild(empty);
+        renderExportLegendPanel();
+        return;
+      }
+
+      exportedOrderKeys.forEach((orderKey) => {
+        const parsed = parseOrderKey(orderKey);
+
+        if (parsed.type === 'title') {
+          const titleItem = titlesById.get(parsed.id);
+          if (!titleItem) {
+            return;
+          }
+
+          currentGroupId = titleItem.id;
+          const titleRow = document.createElement('div');
+          titleRow.className = 'export-layer-title-item';
+          titleRow.textContent = titleItem.label;
+          exportLayerList.appendChild(titleRow);
+          return;
+        }
+
+        if (parsed.type !== 'layer') {
+          return;
+        }
+
+        const entry = exportedLayersById.get(parsed.id);
+        if (!entry) {
+          return;
+        }
+
+        const row = document.createElement('label');
+        row.className = 'export-layer-item';
+
+        const groupIsExclusive = currentGroupId === MAIN_TITLE_GROUP_ID
+          ? exportMainTitleExclusive
+          : Boolean(titlesById.get(currentGroupId) && titlesById.get(currentGroupId).exclusive);
+
+        const visibilityInput = document.createElement('input');
+        visibilityInput.type = groupIsExclusive ? 'radio' : 'checkbox';
+        if (groupIsExclusive) {
+          visibilityInput.name = 'exclusive-group-' + currentGroupId;
+        }
+
+        visibilityInput.checked = entry.visible !== false;
+        visibilityInput.addEventListener('change', () => {
+          if (visibilityInput.checked) {
+            entry.visible = true;
+
+            const exclusiveGroupLayerIds = getExclusiveGroupLayerIdsByLayerId(entry.id);
+            exclusiveGroupLayerIds.forEach((layerId) => {
+              if (layerId === entry.id) {
+                return;
+              }
+
+              const otherEntry = exportedLayersById.get(layerId);
+              if (otherEntry) {
+                otherEntry.visible = false;
+                setSavedLayerVisibility(otherEntry.id, false);
+              }
+            });
+          } else {
+            entry.visible = false;
+          }
+
+          setSavedLayerVisibility(entry.id, entry.visible !== false);
+          refreshExportLayerControl();
+        });
+
+        const name = document.createElement('span');
+        name.textContent = entry.layerLabel || entry.name || entry.id;
+        name.title = name.textContent;
+
+        row.appendChild(visibilityInput);
+        row.appendChild(name);
+        exportLayerList.appendChild(row);
+      });
+
+      renderExportLegendPanel();
+    }
+
+    function rebuildExportLayersForCurrentStyle() {
+      interactiveLayerIds.length = 0;
+      layerEntryByLayerId.clear();
+
+      exportedLayers.forEach((entry) => {
+        const sourceId = getLayerSourceId(entry.id);
+        const polygonFillLayerId = getLayerId(entry.id, 'polygon-fill');
+        const lineLayerId = getLayerId(entry.id, 'line');
+        const polygonOutlineLayerId = getLayerId(entry.id, 'polygon-outline');
+        const pointLayerId = getLayerId(entry.id, 'point');
+
+        entry.popupConfig = normalizePopupConfig(entry.popupConfig);
+
+        if (map.getLayer(pointLayerId)) {
+          map.removeLayer(pointLayerId);
+        }
+        if (map.getLayer(lineLayerId)) {
+          map.removeLayer(lineLayerId);
+        }
+        if (map.getLayer(polygonOutlineLayerId)) {
+          map.removeLayer(polygonOutlineLayerId);
+        }
+        if (map.getLayer(polygonFillLayerId)) {
+          map.removeLayer(polygonFillLayerId);
+        }
+        if (map.getSource(sourceId)) {
+          map.removeSource(sourceId);
+        }
+
+        map.addSource(sourceId, {
+          type: 'geojson',
+          data: entry.data
+        });
+
+        map.addLayer({
+          id: polygonFillLayerId,
+          type: 'fill',
+          source: sourceId,
+          filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'MultiPolygon']],
+          paint: {
+            'fill-color': buildCategoryColorExpression(entry.style, entry.style.fillColor, 'categoryColors'),
+            'fill-opacity': 0.4
+          }
+        });
+
+        map.addLayer({
+          id: lineLayerId,
+          type: 'line',
+          source: sourceId,
+          filter: ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'MultiLineString']],
+          paint: {
+            'line-color': buildCategoryColorExpression(entry.style, entry.style.borderColor, 'categoryBorderColors'),
+            'line-width': 3
+          }
+        });
+
+        map.addLayer({
+          id: polygonOutlineLayerId,
+          type: 'line',
+          source: sourceId,
+          filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'MultiPolygon']],
+          paint: {
+            'line-color': buildCategoryColorExpression(entry.style, entry.style.borderColor, 'categoryBorderColors'),
+            'line-width': 2
+          }
+        });
+
+        map.addLayer({
+          id: pointLayerId,
+          type: 'circle',
+          source: sourceId,
+          filter: ['any', ['==', ['geometry-type'], 'Point'], ['==', ['geometry-type'], 'MultiPoint']],
+          paint: {
+            'circle-radius': 6,
+            'circle-color': buildCategoryColorExpression(entry.style, entry.style.fillColor, 'categoryColors'),
+            'circle-stroke-width': 1,
+            'circle-stroke-color': buildCategoryColorExpression(entry.style, entry.style.borderColor, 'categoryBorderColors')
+          }
+        });
+
+        setSavedLayerVisibility(entry.id, entry.visible !== false);
+        const layerIdsForPopup = [polygonFillLayerId, lineLayerId, polygonOutlineLayerId, pointLayerId];
+        layerIdsForPopup.forEach((layerId) => {
+          interactiveLayerIds.push(layerId);
+          layerEntryByLayerId.set(layerId, entry);
+        });
+      });
+
+      if (!exportMapClickHandlerBound) {
+        exportMapClickHandlerBound = true;
+        map.on('click', (event) => {
+          const clickedFeatures = map.queryRenderedFeatures(event.point, { layers: interactiveLayerIds });
+          if (!clickedFeatures.length) {
+            if (exportFeaturePopup) {
+              exportFeaturePopup.remove();
+              exportFeaturePopup = null;
+            }
+            return;
+          }
+
+          const clickedFeature = clickedFeatures[0];
+          const clickedLayerId = clickedFeature.layer && clickedFeature.layer.id ? clickedFeature.layer.id : '';
+          const entry = layerEntryByLayerId.get(clickedLayerId);
+          if (!entry || entry.visible === false) {
+            return;
+          }
+
+          const popupHtml = buildPreviewPopupHtml(entry, clickedFeature.properties || {});
+          if (!popupHtml) {
+            if (exportFeaturePopup) {
+              exportFeaturePopup.remove();
+              exportFeaturePopup = null;
+            }
+            return;
+          }
+
+          if (exportFeaturePopup) {
+            exportFeaturePopup.remove();
+          }
+
+          exportFeaturePopup = new maplibregl.Popup({ closeOnClick: true, offset: 10 })
+            .setLngLat(event.lngLat)
+            .setHTML(popupHtml)
+            .addTo(map);
+        });
+      }
+
+      refreshExportLayerControl();
+      applyRuntimeExportLayout();
+    }
+
+    map.on('style.load', () => {
+      hasExportStyleLoaded = true;
+      rebuildExportLayersForCurrentStyle();
+    });
+  </script>
+</body>
+</html>
